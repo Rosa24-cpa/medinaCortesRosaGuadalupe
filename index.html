@@ -522,7 +522,103 @@
       document.getElementById('dueKpi').textContent = duePayments;
     }
     
+    // Actualiza la gráfica de pronóstico de cobranza
     function updateForecastChart() {
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      const paymentsByMonth = {};
+
+      // Agrupar pagos por mes
+      contractsData.forEach(contract => {
+        if (!contract.pagos) return;
+        contract.pagos.forEach(payment => {
+          const paymentDate = new Date(payment.fecha.split('/').reverse().join('-'));
+          const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+          if (!paymentsByMonth[monthKey]) {
+            paymentsByMonth[monthKey] = 0;
+          }
+          paymentsByMonth[monthKey] += parseFloat(payment.monto);
+        });
+      });
+
+      // Preparar etiquetas y datos para el gráfico
+      const sortedMonths = Object.keys(paymentsByMonth).sort();
+      const labels = sortedMonths.map(month => {
+        const [year, monthNum] = month.split('-');
+        return new Date(year, monthNum - 1).toLocaleDateString('es-MX', {
+          month: 'short',
+          year: 'numeric'
+        });
+      });
+      const data = sortedMonths.map(month => paymentsByMonth[month]);
+
+      // Calcular acumulado
+      const accumulated = [];
+      let runningTotal = 0;
+      data.forEach(amount => {
+        runningTotal += amount;
+        accumulated.push(runningTotal);
+      });
+
+      // Destruir gráfico anterior si existe
+      if (forecastChart) {
+        forecastChart.destroy();
+      }
+
+      // Crear nuevo gráfico
+      forecastChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Pagos por Mes',
+              data: data,
+              backgroundColor: 'rgba(52, 152, 219, 0.7)',
+              borderColor: 'rgba(52, 152, 219, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Acumulado',
+              data: accumulated,
+              type: 'line',
+              borderColor: 'rgba(46, 204, 113, 1)',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              borderWidth: 2,
+              pointBackgroundColor: 'rgba(46, 204, 113, 1)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function (value) {
+                  return '$' + value.toLocaleString('es-MX');
+                }
+              }
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  label += '$' + context.raw.toLocaleString('es-MX');
+                  return label;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
       const ctx = document.getElementById('forecastChart').getContext('2d');
       
       // Agrupar pagos por mes
@@ -625,7 +721,6 @@
           }
         }
       });
-    }
     
     // Notificaciones de prueba
     document.getElementById('testNotification').addEventListener('click', async () => {

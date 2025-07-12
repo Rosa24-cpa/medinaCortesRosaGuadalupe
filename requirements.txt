@@ -1,0 +1,7 @@
+flask
+flask-cors
+pdfplumber
+pytesseract
+Pillow
+python-dateutil
+PyMuPDF
