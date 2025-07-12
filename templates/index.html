@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPA Forecast - Sistema de Gestión de Contratos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary-color: #3498db;
+      --secondary-color: #2c3e50;
+      --success-color: #27ae60;
+      --danger-color: #e74c3c;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+    .header {
+      background-color: var(--secondary-color);
+      color: white;
+      padding: 2rem 0;
+      margin-bottom: 2rem;
+      border-bottom: 5px solid var(--primary-color);
+    }
+    .upload-container {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .btn-primary {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+    }
+    .contract-card {
+      border-left: 4px solid var(--primary-color);
+      transition: transform 0.3s;
+      margin-bottom: 1.5rem;
+    }
+    .contract-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    }
+    .payment-item {
+      border-bottom: 1px solid #eee;
+      padding: 0.75rem 0;
+    }
+    .payment-item:last-child {
+      border-bottom: none;
+    }
+    .kpi-card {
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      color: white;
+    }
+    .kpi-card.primary {
+      background-color: var(--primary-color);
+    }
+    .kpi-card.success {
+      background-color: var(--success-color);
+    }
+    .kpi-card.warning {
+      background-color: #f39c12;
+    }
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-bottom: 2rem;
+    }
+    .drag-drop-area {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 3rem;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 1rem;
+      transition: all 0.3s;
+    }
+    .drag-drop-area:hover {
+      border-color: var(--primary-color);
+      background-color: #f8f9fa;
+    }
+    .file-list {
+      margin-top: 1rem;
+    }
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem;
+      background: #f1f1f1;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header text-center">
+    <div class="container">
+      <h1 class="display-4">CPA Forecast</h1>
+      <p class="lead">Sistema inteligente de gestion de  contratos y cobranza</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row">
+      <div class="col-md-8">
+        <div class="upload-container">
+          <h2><i class="bi bi-upload"></i> Subir Contratos</h2>
+          <p class="text-muted">Carga tus contratos en PDF para generar automáticamente el plan de cobranza</p>
+          
+          <form id="uploadForm">
+            <div class="drag-drop-area" id="dropArea">
+              <p><i class="bi bi-cloud-arrow-up" style="font-size: 2rem;"></i></p>
+              <p>Arrastra y suelta tus archivos PDF aquí o haz clic para seleccionar</p>
+              <input type="file" id="archivo" name="pdfs" accept=".pdf" multiple required class="d-none" />
+              <button type="button" class="btn btn-primary" onclick="document.getElementById('archivo').click()">
+                Seleccionar Archivos
+              </button>
+            </div>
+            
+            <div class="file-list" id="fileList"></div>
+            
+            <div class="d-grid gap-2 mt-3">
+              <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                <span id="submitText">Procesar Contratos</span>
+                <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+        
+        <div id="resultado"></div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="kpi-card primary">
+          <h5>Ingreso Mensual Recurrente (MRR)</h5>
+          <h2 id="mrrKpi">$0.00</h2>
+          <small class="opacity-75">Total proyectado mensual</small>
+        </div>
+        
+        <div class="kpi-card success">
+          <h5>Ingresos Devengados</h5>
+          <h2 id="earnedKpi">$0.00</h2>
+          <small class="opacity-75">Total acumulado</small>
+        </div>
+        
+        <div class="kpi-card warning">
+          <h5>Próximos Vencimientos</h5>
+          <h2 id="dueKpi">0</h2>
+          <small class="opacity-75">En los próximos 7 días</small>
+        </div>
+        
+        <div class="card mt-3">
+          <div class="card-header">
+            <h5 class="mb-0">Notificaciones</h5>
+          </div>
+          <div class="card-body">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="notificationsToggle" checked>
+              <label class="form-check-label" for="notificationsToggle">Alertas por email</label>
+            </div>
+            <button class="btn btn-outline-primary btn-sm" id="testNotification">
+              Probar Notificación
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Pronóstico de Cobranza</h5>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="forecastChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Variables globales
+    let forecastChart;
+    const contractsData = [];
+    
+    // Configuración de arrastrar y soltar
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('archivo');
+    const fileList = document.getElementById('fileList');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, unhighlight, false);
+    });
+    
+    function highlight() {
+      dropArea.classList.add('bg-light');
+      dropArea.style.borderColor = '#3498db';
+    }
+    
+    function unhighlight() {
+      dropArea.classList.remove('bg-light');
+      dropArea.style.borderColor = '#ccc';
+    }
+    
+    dropArea.addEventListener('drop', handleDrop, false);
+    fileInput.addEventListener('change', updateFileList);
+    
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      fileInput.files = files;
+      updateFileList();
+    }
+    
+    function updateFileList() {
+      fileList.innerHTML = '';
+      const files = fileInput.files;
+      
+      if (files.length > 0) {
+        Array.from(files).forEach(file => {
+          const fileItem = document.createElement('div');
+          fileItem.className = 'file-item';
+          fileItem.innerHTML = `
+            <span>${file.name}</span>
+            <span>${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+          `;
+          fileList.appendChild(fileItem);
+        });
+      }
+    }
+    
+    // Manejo del formulario
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const submitBtn = document.getElementById('submitBtn');
+      const submitText = document.getElementById('submitText');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      
+      submitBtn.disabled = true;
+      submitText.textContent = 'Procesando...';
+      loadingSpinner.classList.remove('d-none');
+      
+      const resultadoDiv = document.getElementById('resultado');
+      resultadoDiv.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Procesando contratos...</p></div>';
+      
+      const files = fileInput.files;
+      
+      if (files.length === 0) {
+        showAlert('Por favor selecciona al menos un archivo PDF', 'danger');
+        resetSubmitButton();
+        return;
+      }
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('pdfs', files[i]);
+      }
+
+      try {
+        const res = await fetch('http://54.236.6.28:5000/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          throw new Error(`Error HTTP: ${res.status}`);
+        }
+
+        const datos = await res.json();
+
+        if (datos.success) {
+          contractsData.push(...datos.data.filter(d => !d.error));
+          displayResults(datos.data);
+          updateKPIs();
+          updateForecastChart();
+          showAlert(`${datos.data.length} contratos procesados exitosamente`, 'success');
+        } else {
+          showAlert(`Error general: ${datos.error || 'Error desconocido'}`, 'danger');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showAlert(`Error al conectar con el servidor: ${error.message}`, 'danger');
+      } finally {
+        resetSubmitButton();
+      }
+    });
+    
+    function resetSubmitButton() {
+      const submitBtn = document.getElementById('submitBtn');
+      const submitText = document.getElementById('submitText');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      
+      submitBtn.disabled = false;
+      submitText.textContent = 'Procesar Contratos';
+      loadingSpinner.classList.add('d-none');
+    }
+    
+    function showAlert(message, type) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+      alertDiv.role = 'alert';
+      alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      `;
+      
+      // Insertar al principio del contenedor de resultados
+      const resultadoDiv = document.getElementById('resultado');
+      if (resultadoDiv.firstChild) {
+        resultadoDiv.insertBefore(alertDiv, resultadoDiv.firstChild);
+      } else {
+        resultadoDiv.appendChild(alertDiv);
+      }
+      
+      // Auto cerrar después de 5 segundos
+      setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alertDiv);
+        bsAlert.close();
+      }, 5000);
+    }
+    
+    function displayResults(data) {
+      const resultadoDiv = document.getElementById('resultado');
+      let html = "";
+      
+      data.forEach(d => {
+        if (d.error) {
+          html += `
+            <div class="alert alert-danger">
+              <strong>Error en ${d.archivo}:</strong> ${d.error}
+            </div>`;
+        } else {
+          // Función segura para formatear montos
+          const formatMonto = (monto) => {
+            try {
+              const num = parseFloat(monto);
+              return isNaN(num) ? '$0.00' : 
+                num.toLocaleString('es-MX', {
+                  style: 'currency',
+                  currency: 'MXN',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                });
+            } catch {
+              return '$0.00';
+            }
+          };
+
+          // Función segura para formatear fechas
+          const safeGet = (obj, prop, defaultValue = 'No especificado') => {
+            return obj[prop] !== undefined ? obj[prop] : defaultValue;
+          };
+
+          html += `
+            <div class="card contract-card mb-3">
+              <div class="card-header bg-white">
+                <h4 class="mb-0">${safeGet(d, 'archivo')}</h4>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <p><strong>Cliente:</strong> ${safeGet(d, 'cliente')}</p>
+                    <p><strong>Monto total:</strong> ${formatMonto(safeGet(d, 'monto', '0'))}</p>
+                    <p><strong>Inicio:</strong> ${safeGet(d, 'inicio')}</p>
+                  </div>
+                  <div class="col-md-6">
+                    <p><strong>Frecuencia:</strong> ${safeGet(d, 'frecuencia', 'Mensual')}</p>
+                    <p><strong>Duración:</strong> ${safeGet(d, 'duracion_meses', '12')} meses</p>
+                    <p><strong>Estado:</strong> <span class="badge bg-success">Activo</span></p>
+                  </div>
+                </div>
+                
+                <h5 class="mt-3">Plan de pagos:</h5>
+                <div class="table-responsive">
+                  <table class="table table-sm">
+                    <thead class="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>Fecha</th>
+                        <th>Monto</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+          
+          if (d.pagos && Array.isArray(d.pagos) && d.pagos.length > 0) {
+            d.pagos.forEach((pago, index) => {
+              const paymentDate = new Date(pago.fecha.split('/').reverse().join('-'));
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              
+              let status = '';
+              if (paymentDate < today) {
+                status = '<span class="badge bg-success">Pagado</span>';
+              } else if (paymentDate.toDateString() === today.toDateString()) {
+                status = '<span class="badge bg-warning text-dark">Hoy</span>';
+              } else {
+                status = '<span class="badge bg-secondary">Pendiente</span>';
+              }
+              
+              html += `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${safeGet(pago, 'fecha', 'Fecha no disponible')}</td>
+                  <td>${formatMonto(safeGet(pago, 'monto', '0'))}</td>
+                  <td>${status}</td>
+                </tr>`;
+            });
+          } else {
+            html += `
+              <tr>
+                <td colspan="4" class="text-center text-muted">No se pudo generar el plan de pagos</td>
+              </tr>`;
+          }
+          
+          html += `
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>`;
+        }
+      });
+      
+      resultadoDiv.innerHTML = html;
+    }
+    
+    function updateKPIs() {
+      // Calcular MRR (Monthly Recurring Revenue)
+      const mrr = contractsData.reduce((sum, contract) => {
+        const monthlyAmount = parseFloat(contract.monto) / parseInt(contract.duracion_meses || '12');
+        return sum + monthlyAmount;
+      }, 0);
+      
+      // Calcular ingresos devengados
+      const earned = contractsData.reduce((sum, contract) => {
+        if (!contract.pagos) return sum;
+        
+        const paidAmount = contract.pagos.reduce((paid, payment) => {
+          const paymentDate = new Date(payment.fecha.split('/').reverse().join('-'));
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          return paymentDate <= today ? paid + parseFloat(payment.monto) : paid;
+        }, 0);
+        
+        return sum + paidAmount;
+      }, 0);
+      
+      // Calcular próximos vencimientos (7 días)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const nextWeek = new Date();
+      nextWeek.setDate(today.getDate() + 7);
+      nextWeek.setHours(0, 0, 0, 0);
+      
+      const duePayments = contractsData.reduce((count, contract) => {
+        if (!contract.pagos) return count;
+        
+        const contractDue = contract.pagos.filter(payment => {
+          const paymentDate = new Date(payment.fecha.split('/').reverse().join('-'));
+          return paymentDate > today && paymentDate <= nextWeek;
+        }).length;
+        
+        return count + contractDue;
+      }, 0);
+      
+      // Actualizar UI
+      document.getElementById('mrrKpi').textContent = mrr.toLocaleString('es-MX', {
+        style: 'currency',
+        currency: 'MXN'
+      });
+      
+      document.getElementById('earnedKpi').textContent = earned.toLocaleString('es-MX', {
+        style: 'currency',
+        currency: 'MXN'
+      });
+      
+      document.getElementById('dueKpi').textContent = duePayments;
+    }
+    
+    // Actualiza la gráfica de pronóstico de cobranza
+    function updateForecastChart() {
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      const paymentsByMonth = {};
+
+      // Agrupar pagos por mes
+      contractsData.forEach(contract => {
+        if (!contract.pagos) return;
+        contract.pagos.forEach(payment => {
+          const paymentDate = new Date(payment.fecha.split('/').reverse().join('-'));
+          const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+          if (!paymentsByMonth[monthKey]) {
+            paymentsByMonth[monthKey] = 0;
+          }
+          paymentsByMonth[monthKey] += parseFloat(payment.monto);
+        });
+      });
+
+      // Preparar etiquetas y datos para el gráfico
+      const sortedMonths = Object.keys(paymentsByMonth).sort();
+      const labels = sortedMonths.map(month => {
+        const [year, monthNum] = month.split('-');
+        return new Date(year, monthNum - 1).toLocaleDateString('es-MX', {
+          month: 'short',
+          year: 'numeric'
+        });
+      });
+      const data = sortedMonths.map(month => paymentsByMonth[month]);
+
+      // Calcular acumulado
+      const accumulated = [];
+      let runningTotal = 0;
+      data.forEach(amount => {
+        runningTotal += amount;
+        accumulated.push(runningTotal);
+      });
+
+      // Destruir gráfico anterior si existe
+      if (forecastChart) {
+        forecastChart.destroy();
+      }
+
+      // Crear nuevo gráfico
+      forecastChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Pagos por Mes',
+              data: data,
+              backgroundColor: 'rgba(52, 152, 219, 0.7)',
+              borderColor: 'rgba(52, 152, 219, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Acumulado',
+              data: accumulated,
+              type: 'line',
+              borderColor: 'rgba(46, 204, 113, 1)',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              borderWidth: 2,
+              pointBackgroundColor: 'rgba(46, 204, 113, 1)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function (value) {
+                  return '$' + value.toLocaleString('es-MX');
+                }
+              }
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  label += '$' + context.raw.toLocaleString('es-MX');
+                  return label;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      
+      // Agrupar pagos por mes
+      const paymentsByMonth = {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      contractsData.forEach(contract => {
+        if (!contract.pagos) return;
+        
+        contract.pagos.forEach(payment => {
+          const paymentDate = new Date(payment.fecha.split('/').reverse().join('-'));
+          if (paymentDate < today) return;
+          
+          const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (!paymentsByMonth[monthKey]) {
+            paymentsByMonth[monthKey] = 0;
+          }
+          
+          paymentsByMonth[monthKey] += parseFloat(payment.monto);
+        });
+      });
+      
+      // Ordenar meses y preparar datos para el gráfico
+      const sortedMonths = Object.keys(paymentsByMonth).sort();
+      const labels = sortedMonths.map(month => {
+        const [year, monthNum] = month.split('-');
+        return new Date(year, monthNum - 1).toLocaleDateString('es-MX', {
+          month: 'short',
+          year: 'numeric'
+        });
+      });
+      
+      const data = sortedMonths.map(month => paymentsByMonth[month]);
+      
+      // Calcular acumulado
+      const accumulated = [];
+      let runningTotal = 0;
+      data.forEach(amount => {
+        runningTotal += amount;
+        accumulated.push(runningTotal);
+      });
+      
+      // Destruir gráfico anterior si existe
+      if (forecastChart) {
+        forecastChart.destroy();
+      }
+      
+      // Crear nuevo gráfico
+      forecastChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Pagos por Mes',
+              data: data,
+              backgroundColor: 'rgba(52, 152, 219, 0.7)',
+              borderColor: 'rgba(52, 152, 219, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Acumulado',
+              data: accumulated,
+              type: 'line',
+              borderColor: 'rgba(46, 204, 113, 1)',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              borderWidth: 2,
+              pointBackgroundColor: 'rgba(46, 204, 113, 1)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString('es-MX');
+                }
+              }
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
+                  }
+                  label += '$' + context.raw.toLocaleString('es-MX');
+                  return label;
+                }
+              }
+            }
+          }
+        }
+      });
+    
+    // Notificaciones de prueba
+    document.getElementById('testNotification').addEventListener('click', async () => {
+      try {
+        const response = await fetch('http://54.236.6.28:5000/api/test-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: 'usuario@ejemplo.com',
+            message: 'Esta es una notificación de prueba de CPA Forecast'
+          })
+        });
+        
+        if (response.ok) {
+          showAlert('Notificación de prueba enviada correctamente', 'success');
+        } else {
+          throw new Error('Error en el servidor');
+        }
+      } catch (error) {
+        showAlert('Error al enviar notificación de prueba', 'danger');
+        console.error('Error:', error);
+      }
+    });
+    
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', () => {
+      // Inicializar tooltips de Bootstrap
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+      
+      // Inicializar gráfico vacío
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      forecastChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Pagos por Mes',
+            data: [],
+            backgroundColor: 'rgba(52, 152, 219, 0.7)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    });
+  </script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

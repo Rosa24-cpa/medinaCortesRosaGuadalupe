@@ -1,6 +1,6 @@
 
 # -*- coding: utf-8 -*-
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import os
 import pdfplumber
 import pytesseract
@@ -60,6 +60,13 @@ def allowed_file(filename):
 @app.route('/')
 def home():
     return "Servidor CPA Forecast activo"
+    
+    
+@app.route('/dashboard')
+def dashboard():
+    return render_template('index.html')
+    
+    
 
 @app.route('/api/upload', methods=['POST'])
 def upload_pdfs():
@@ -195,4 +202,6 @@ def save_to_database(contrato: Dict):
         conn.commit()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    import sys
+    port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else 5000
+    app.run(host='0.0.0.0', port=port, debug=True)
